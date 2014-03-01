@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+override_dh_auto_clean:
+	dh_auto_clean
+	rm Makefile.config
+
+override_dh_auto_configure:
+	dh_auto_configure -- --enable-gc --enable-perl-bindings \
+	    --with-docbook-rng=/usr/share/xml/docbook/schema/rng/5.0/ \
+	    --with-docbook-xsl=/usr/share/xml/docbook/stylesheet/docbook-xsl/
+
+override_dh_auto_install:
+	dh_auto_install
+	mkdir -p $$(pwd)/debian/nix/etc/nix
+	cp debian/extra/nix.conf $$(pwd)/debian/nix/etc/nix/
+
+%:
+	dh $@ --parallel

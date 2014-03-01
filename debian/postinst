@@ -1,0 +1,23 @@
+#!/bin/bash
+set -e
+
+addgroup --system nixbld
+addgroup --system nix_users
+for x in $(seq 10); do
+    adduser --system --home /var/empty \
+        --shell /noshell --no-create-home nixbld$x
+    adduser nixbld$x nixbld
+done
+
+mkdir -p /nix/store
+chown root:nixbld /nix/store
+chmod 1775 /nix/store
+
+for x in /var/nix/profiles/per-user/ /var/nix/gcroots/; do
+    mkdir -p "$x"
+    chown root:nix_users "$x"
+    chmod 0775 "$x"
+done
+
+# Make sure root has ~/.nix-* files
+su - -c "true"

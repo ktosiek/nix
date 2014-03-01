@@ -1,0 +1,11 @@
+Source: nix
+Maintainer: Tomasz Kontusz <tomasz.kontusz@gmail.com>
+Section: misc
+Priority: optional
+Standards-Version: 3.9.4
+Build-Depends: debhelper (>= 9), libbz2-dev, docbook5-xml
+
+Package: nix
+Architecture: any
+Depends: adduser, ${shlibs:Depends}, ${misc:Depends}
+Description: functional package manager
