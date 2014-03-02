@@ -13,7 +13,7 @@ mkdir -p /nix/store
 chown root:nixbld /nix/store
 chmod 1775 /nix/store
 
-for x in /var/nix/profiles/per-user/ /var/nix/gcroots/; do
+for x in /var/nix/profiles/per-user/ /var/nix/gcroots/per-user/; do
     mkdir -p "$x"
     chown root:nix_users "$x"
     chmod 0775 "$x"

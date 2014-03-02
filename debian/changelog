@@ -1,3 +1,9 @@
+nix (1.7ubuntu3) saucy; urgency=high
+
+  * [2ab1c533] Set proper permissions on /var/nix/gcroots/per-user/
+
+ -- Tomasz Kontusz <tomasz.kontusz@gmail.com>  Sun, 02 Mar 2014 21:22:28 +0100
+
 nix (1.7ubuntu2) saucy; urgency=low
 
   [ Shea Levy ]
