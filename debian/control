@@ -7,5 +7,12 @@ Build-Depends: debhelper (>= 9), libbz2-dev, docbook5-xml, docbook-xsl, autoconf
 
 Package: nix
 Architecture: any
-Depends: adduser, curl, libwww-curl-perl, ${shlibs:Depends}, ${misc:Depends}
+Depends:
+# From the official package
+  curl, libwww-curl-perl, libdbd-sqlite3-perl, libsqlite3-0, libbz2-1.0,
+  bzip2, xz-utils,
+# For maintainer scripts
+  adduser,
+# Magic
+  ${shlibs:Depends}, ${misc:Depends}
 Description: functional package manager
