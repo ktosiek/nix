@@ -19,5 +19,8 @@ for x in /var/nix/profiles/per-user/ /var/nix/gcroots/; do
     chmod 0775 "$x"
 done
 
+# Start the daemon
+invoke-rc.d 'nix-daemon' restart
+
 # Make sure root has ~/.nix-* files
 su - -c "true"

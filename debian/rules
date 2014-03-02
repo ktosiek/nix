@@ -10,5 +10,9 @@ override_dh_auto_configure:
 	    --with-docbook-rng=/usr/share/xml/docbook/schema/rng/5.0/ \
 	    --with-docbook-xsl=/usr/share/xml/docbook/stylesheet/docbook-xsl/
 
+override_dh_auto_install:
+	dh_auto_install
+	dh_installinit --name=nix-daemon
+
 %:
 	dh $@ --parallel

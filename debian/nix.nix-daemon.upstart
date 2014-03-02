@@ -1,0 +1,10 @@
+# nix-daemon - build manager for shared nix store
+
+description	"build manager for shared nix store"
+
+start on runlevel [2345]
+stop on runlevel [!2345]
+
+respawn
+
+exec nix-daemon
