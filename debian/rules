@@ -1,5 +1,7 @@
 #!/usr/bin/make -f
 override_dh_auto_clean:
+	./bootstrap.sh
+	./configure
 	dh_auto_clean
 	rm Makefile.config
 

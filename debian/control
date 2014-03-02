@@ -3,9 +3,9 @@ Maintainer: Tomasz Kontusz <tomasz.kontusz@gmail.com>
 Section: misc
 Priority: optional
 Standards-Version: 3.9.4
-Build-Depends: debhelper (>= 9), libbz2-dev, docbook5-xml
+Build-Depends: debhelper (>= 9), libbz2-dev, docbook5-xml, docbook-xsl, autoconf, perl-base, libsqlite3-dev, libdbd-sqlite3-perl, libgc-dev, flex, bison, automake, pkg-config, curl, libwww-curl-perl, libxml2-utils, xsltproc
 
 Package: nix
 Architecture: any
-Depends: adduser, ${shlibs:Depends}, ${misc:Depends}
+Depends: adduser, curl, libwww-curl-perl, ${shlibs:Depends}, ${misc:Depends}
 Description: functional package manager
