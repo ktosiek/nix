@@ -1,1 +1,3 @@
 debian/extra/nix.conf /etc/nix/
+misc/vim/syntax/nix.vim /usr/share/vim/addons/syntax/
+debian/extra/vim-registry/nix.yaml /usr/share/vim/registry/

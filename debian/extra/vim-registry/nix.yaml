@@ -1,0 +1,4 @@
+addon: nix
+description: "allow syntax highlighting for Nix files"
+files:
+  - syntax/nix.vim
