@@ -40,5 +40,5 @@ if test -n "$HOME"; then
         fi
     fi
 
-    export PATH=$HOME/.nix-profile/bin:$OLD_PATH
+    export PATH=$HOME/.nix-profile/bin:$HOME/.nix-profile/sbin:$OLD_PATH
 fi

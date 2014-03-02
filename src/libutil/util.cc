@@ -281,34 +281,6 @@ void writeLine(int fd, string s)
 }
 
 
-static void _computePathSize(const Path & path,
-    unsigned long long & bytes, unsigned long long & blocks)
-{
-    checkInterrupt();
-
-    struct stat st = lstat(path);
-
-    bytes += st.st_size;
-    blocks += st.st_blocks;
-
-    if (S_ISDIR(st.st_mode)) {
-        Strings names = readDirectory(path);
-
-        for (Strings::iterator i = names.begin(); i != names.end(); ++i)
-            _computePathSize(path + "/" + *i, bytes, blocks);
-    }
-}
-
-
-void computePathSize(const Path & path,
-    unsigned long long & bytes, unsigned long long & blocks)
-{
-    bytes = 0;
-    blocks = 0;
-    _computePathSize(path, bytes, blocks);
-}
-
-
 static void _deletePath(const Path & path, unsigned long long & bytesFreed)
 {
     checkInterrupt();
@@ -351,25 +323,6 @@ void deletePath(const Path & path, unsigned long long & bytesFreed)
         format("recursively deleting path `%1%'") % path);
     bytesFreed = 0;
     _deletePath(path, bytesFreed);
-}
-
-
-void makePathReadOnly(const Path & path)
-{
-    checkInterrupt();
-
-    struct stat st = lstat(path);
-
-    if (!S_ISLNK(st.st_mode) && (st.st_mode & S_IWUSR)) {
-        if (chmod(path.c_str(), st.st_mode & ~S_IWUSR) == -1)
-            throw SysError(format("making `%1%' read-only") % path);
-    }
-
-    if (S_ISDIR(st.st_mode)) {
-        Strings names = readDirectory(path);
-        for (Strings::iterator i = names.begin(); i != names.end(); ++i)
-            makePathReadOnly(path + "/" + *i);
-    }
 }
 
 
@@ -430,6 +383,13 @@ Paths createDirs(const Path & path)
     if (!S_ISDIR(st.st_mode)) throw Error(format("`%1%' is not a directory") % path);
 
     return created;
+}
+
+
+void createSymlink(const Path & target, const Path & link)
+{
+    if (symlink(target.c_str(), link.c_str()))
+        throw SysError(format("creating symlink from `%1%' to `%2%'") % link % target);
 }
 
 

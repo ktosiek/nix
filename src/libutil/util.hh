@@ -78,19 +78,12 @@ string readLine(int fd);
 /* Write a line to a file descriptor. */
 void writeLine(int fd, string s);
 
-/* Compute the sum of the sizes of all files in `path'. */
-void computePathSize(const Path & path,
-    unsigned long long & bytes, unsigned long long & blocks);
-
 /* Delete a path; i.e., in the case of a directory, it is deleted
    recursively.  Don't use this at home, kids.  The second variant
    returns the number of bytes and blocks freed. */
 void deletePath(const Path & path);
 
 void deletePath(const Path & path, unsigned long long & bytesFreed);
-
-/* Make a path read-only recursively. */
-void makePathReadOnly(const Path & path);
 
 /* Create a temporary directory. */
 Path createTempDir(const Path & tmpRoot = "", const Path & prefix = "nix",
@@ -99,6 +92,9 @@ Path createTempDir(const Path & tmpRoot = "", const Path & prefix = "nix",
 /* Create a directory and all its parents, if necessary.  Returns the
    list of created directories, in order of creation. */
 Paths createDirs(const Path & path);
+
+/* Create a symlink. */
+void createSymlink(const Path & target, const Path & link);
 
 
 template<class T, class A>
