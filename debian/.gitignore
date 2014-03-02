@@ -1,0 +1,5 @@
+tmp/
+files
+nix*.debhelper*
+nix*.substvars
+nix/
