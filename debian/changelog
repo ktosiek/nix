@@ -1,3 +1,107 @@
+nix (1.7ubuntu2) saucy; urgency=low
+
+  [ Shea Levy ]
+  * [df5de9df] Add use-ssh-substituter setting.
+
+  [ Eelco Dolstra ]
+  * [dcaea042] Only start download-via-ssh if it's enabled
+
+  [ Ian-Woo Kim ]
+  * [8a02fdc3] use USER environmental variable if getting user id by getpwuid is failed in perl scripts: download-from-binary-cache.pl and nix-channel
+
+  [ Eelco Dolstra ]
+  * [bf4a577a] Fix broken patch
+  * [42eb4afd] Simplify getting use-ssh-substituter from untrusted users
+
+  [ Shea Levy ]
+  * [73321414] Document dynamic attributes
+
+  [ Eelco Dolstra ]
+  * [f14ef84a] Warn about missing -I paths
+  * [d761009e] Add ~/.nix-profile/sbin to $PATH
+  * [00d76101] Respect $NIX_CONNECT_TIMEOUT properly
+  * [7f74513b] Also provide an option for setting the curl connection timeout
+  * [6b9cd59a] nix-store -r: Respect --add-root for non-derivations
+  * [506d8639] Installer: Handle Darwin
+  * [fdff3a7e] Add a test for nix-store --dump-db / --load-db
+  * [19437785] Test nix-store --optimise
+  * [84143c4b] Test nix-store -l
+  * [fac6f8aa] Test nix-store -q --roots
+  * [045d3b2e] Test nix-store --switch-profile and more daemon actions
+  * [a9c4a987] Test ~/.nix-defexpr
+  * [a0806389] Test the -b and -s flags of nix-store -q
+  * [7bbc68fd] Test nix-env --set
+  * [d58ceae0] Test nix-env --switch-generation
+  * [509993e5] Remove unused function
+  * [432328cc] Remove another unused function
+  * [91f25f05] And another one
+  * [3d0a9ec8] Test executables in NARs
+  * [5ad263c2] Test some more primops
+  * [78809738] Test trace and addErrorContext
+  * [7c770763] Doh
+  * [29cde917] Fix deadlock in SubstitutionGoal
+  * [c9f62323] Correctly detect infinite recursion in function application
+  * [3fd01b17] Set up a minimal /dev in chroots
+  * [1017bd68] Set up a private /dev/pts in the chroot
+  * [3a86888f] Typo
+
+  [ Tomasz Kontusz ]
+  * [01a6abd3] converting branch to topgit format
+
+ -- Tomasz Kontusz <tomasz.kontusz@gmail.com>  Sun, 02 Mar 2014 20:36:03 +0100
+
+nix (1.7ubuntu1) saucy; urgency=low
+
+  [ Shea Levy ]
+  * Add use-ssh-substituter setting.
+
+  [ Eelco Dolstra ]
+  * Only start download-via-ssh if it's enabled
+
+  [ Ian-Woo Kim ]
+  * use USER environmental variable if getting user id by getpwuid is failed in perl scripts: download-from-binary-cache.pl and nix-channel
+
+  [ Eelco Dolstra ]
+  * Fix broken patch
+  * Simplify getting use-ssh-substituter from untrusted users
+
+  [ Shea Levy ]
+  * Document dynamic attributes
+
+  [ Eelco Dolstra ]
+  * Warn about missing -I paths
+  * Add ~/.nix-profile/sbin to $PATH
+  * Respect $NIX_CONNECT_TIMEOUT properly
+  * Also provide an option for setting the curl connection timeout
+  * nix-store -r: Respect --add-root for non-derivations
+  * Installer: Handle Darwin
+  * Add a test for nix-store --dump-db / --load-db
+  * Test nix-store --optimise
+  * Test nix-store -l
+  * Test nix-store -q --roots
+  * Test nix-store --switch-profile and more daemon actions
+  * Test ~/.nix-defexpr
+  * Test the -b and -s flags of nix-store -q
+  * Test nix-env --set
+  * Test nix-env --switch-generation
+  * Remove unused function
+  * Remove another unused function
+  * And another one
+  * Test executables in NARs
+  * Test some more primops
+  * Test trace and addErrorContext
+  * Doh
+  * Fix deadlock in SubstitutionGoal
+  * Correctly detect infinite recursion in function application
+  * Set up a minimal /dev in chroots
+  * Set up a private /dev/pts in the chroot
+  * Typo
+
+  [ Tomasz Kontusz ]
+  * converting branch to topgit format
+
+ -- Tomasz Kontusz <tomasz.kontusz@gmail.com>  Sun, 02 Mar 2014 20:35:30 +0100
+
 nix (1.7) saucy; urgency=low
 
   * Initial release.
