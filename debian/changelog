@@ -1,3 +1,9 @@
+nix (1.7ubuntu5) unstable; urgency=low
+
+  * Change distribution to "unstable"
+
+ -- Tomasz Kontusz <tomasz.kontusz@gmail.com>  Mon, 03 Mar 2014 23:42:16 +0100
+
 nix (1.7ubuntu4) saucy; urgency=low
 
   * [a2cc1ac0] Don't call dh_auto_clean, as it would try to run non-existing make distclean on precise
