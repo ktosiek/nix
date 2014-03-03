@@ -2,7 +2,7 @@
 override_dh_auto_clean:
 	./bootstrap.sh
 	./configure
-	dh_auto_clean
+	make clean
 	rm Makefile.config
 
 override_dh_auto_configure:
