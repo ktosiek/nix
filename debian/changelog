@@ -1,3 +1,9 @@
+nix (1.7ubuntu6) unstable; urgency=low
+
+  * Add w3m to build requirements
+
+ -- Tomasz Kontusz <tomasz.kontusz@gmail.com>  Sat, 29 Mar 2014 10:00:53 +0100
+
 nix (1.7ubuntu5) unstable; urgency=low
 
   * Change distribution to "unstable"
