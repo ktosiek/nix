@@ -58,6 +58,7 @@ struct Globals
     bool removeAll;
     string forceName;
     bool prebuiltOnly;
+    Globals(const Strings & searchPath) : state(searchPath) { }
 };
 
 
@@ -105,16 +106,16 @@ static bool isNixExpr(const Path & path, struct stat & st)
 static void getAllExprs(EvalState & state,
     const Path & path, StringSet & attrs, Value & v)
 {
-    Strings names = readDirectory(path);
-    StringSet namesSorted(names.begin(), names.end());
+    StringSet namesSorted;
+    for (auto & i : readDirectory(path)) namesSorted.insert(i.name);
 
-    foreach (StringSet::iterator, i, namesSorted) {
+    for (auto & i : namesSorted) {
         /* Ignore the manifest.nix used by profiles.  This is
            necessary to prevent it from showing up in channels (which
            are implemented using profiles). */
-        if (*i == "manifest.nix") continue;
+        if (i == "manifest.nix") continue;
 
-        Path path2 = path + "/" + *i;
+        Path path2 = path + "/" + i;
 
         struct stat st;
         if (stat(path2.c_str(), &st) == -1)
@@ -125,7 +126,7 @@ static void getAllExprs(EvalState & state,
                otherwise the attribute cannot be selected with the
                `-A' option.  Useful if you want to stick a Nix
                expression directly in ~/.nix-defexpr. */
-            string attrName = *i;
+            string attrName = i;
             if (hasSuffix(attrName, ".nix"))
                 attrName = string(attrName, 0, attrName.size() - 4);
             if (attrs.find(attrName) != attrs.end()) {
@@ -881,9 +882,10 @@ static void queryJSON(Globals & globals, vector<DrvInfo> & elems)
         foreach (StringSet::iterator, j, metaNames) {
             metaObj.attr(*j);
             Value * v = i->queryMeta(*j);
-            if (!v)
+            if (!v) {
                 printMsg(lvlError, format("derivation `%1%' has invalid meta attribute `%2%'") % i->name % *j);
-            else {
+                cout << "null";
+            } else {
                 PathSet context;
                 printValueAsJSON(globals.state, true, *v, cout, context);
             }
@@ -1304,9 +1306,30 @@ static void opDeleteGenerations(Globals & globals,
             for (Generations::iterator j = gens.begin(); j != gens.end(); ++j)
                 if (j->number != curGen)
                     deleteGeneration2(globals, j->number);
-        }
+        } else if (i->size() >= 2 && tolower(*i->rbegin()) == 'd') {
+            time_t curTime = time(NULL);
+            time_t oldTime;
+            string strDays = string(*i, 0, i->size() - 1);
+            int days;
 
-        else {
+            if (!string2Int(strDays, days) || days < 1)
+                throw UsageError(format("invalid number of days specifier `%1%'") % *i);
+
+            oldTime = curTime - days * 24 * 3600;
+
+            bool canDelete = false;
+            for (Generations::reverse_iterator j = gens.rbegin(); j != gens.rend(); ++j) {
+                if (canDelete) {
+                    assert(j->creationTime < oldTime);
+                    deleteGeneration2(globals, j->number);
+                } else if (j->creationTime < oldTime) {
+                    /* We may now start deleting generations, but we don't delete
+                       this generation yet, because this generation was still the
+                       one that was active at the requested point in time. */
+                    canDelete = true;
+                }
+            }
+        } else {
             int n;
             if (!string2Int(*i, n) || n < 0)
                 throw UsageError(format("invalid generation specifier `%1%'")  % *i);
@@ -1330,7 +1353,17 @@ void run(Strings args)
     Strings opFlags, opArgs, remaining;
     Operation op = 0;
 
-    Globals globals;
+    /* FIXME: hack. */
+    Strings searchPath;
+    Strings args2;
+    for (Strings::iterator i = args.begin(); i != args.end(); ) {
+        string arg = *i++;
+        if (!parseSearchPathArg(arg, i, args.end(), searchPath))
+            args2.push_back(arg);
+    }
+    args = args2;
+
+    Globals globals(searchPath);
 
     globals.instSource.type = srcUnknown;
     globals.instSource.nixExprPath = getDefNixExprPath();
@@ -1350,8 +1383,6 @@ void run(Strings args)
             op = opInstall;
         else if (parseOptionArg(arg, i, args.end(),
                      globals.state, globals.instSource.autoArgs))
-            ;
-        else if (parseSearchPathArg(arg, i, args.end(), globals.state))
             ;
         else if (arg == "--force-name") // undocumented flag for nix-install-package
             globals.forceName = needArg(i, args, arg);

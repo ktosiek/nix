@@ -31,7 +31,6 @@ Makefile.config
 /doc/manual/*.1
 /doc/manual/*.5
 /doc/manual/*.8
-/doc/manual/images
 /doc/manual/version.txt
 /doc/manual/release-notes.html
 
@@ -107,6 +106,10 @@ Makefile.config
 
 /perl/lib/Nix/Config.pm
 /perl/lib/Nix/Store.cc
+
+/misc/systemd/nix-daemon.service
+/misc/systemd/nix-daemon.socket
+/misc/upstart/nix-daemon.conf
 
 *.a
 *.o

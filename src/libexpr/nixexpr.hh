@@ -15,7 +15,6 @@ MakeError(AssertionError, EvalError)
 MakeError(ThrownError, AssertionError)
 MakeError(Abort, EvalError)
 MakeError(TypeError, EvalError)
-MakeError(ImportError, EvalError) // error building an imported derivation
 MakeError(UndefinedVarError, Error)
 
 
@@ -28,6 +27,10 @@ struct Pos
     Pos() : line(0), column(0) { };
     Pos(const Symbol & file, unsigned int line, unsigned int column)
         : file(file), line(line), column(column) { };
+    operator bool() const
+    {
+        return line != 0;
+    }
     bool operator < (const Pos & p2) const
     {
         if (!line) return p2.line;
@@ -138,6 +141,7 @@ struct ExprVar : Expr
     unsigned int level;
     unsigned int displ;
 
+    ExprVar(const Symbol & name) : name(name) { };
     ExprVar(const Pos & pos, const Symbol & name) : pos(pos), name(name) { };
     COMMON_METHODS
     Value * maybeThunk(EvalState & state, Env & env);
@@ -145,10 +149,11 @@ struct ExprVar : Expr
 
 struct ExprSelect : Expr
 {
+    Pos pos;
     Expr * e, * def;
     AttrPath attrPath;
-    ExprSelect(Expr * e, const AttrPath & attrPath, Expr * def) : e(e), def(def), attrPath(attrPath) { };
-    ExprSelect(Expr * e, const Symbol & name) : e(e), def(0) { attrPath.push_back(AttrName(name)); };
+    ExprSelect(const Pos & pos, Expr * e, const AttrPath & attrPath, Expr * def) : pos(pos), e(e), def(def), attrPath(attrPath) { };
+    ExprSelect(const Pos & pos, Expr * e, const Symbol & name) : pos(pos), e(e), def(0) { attrPath.push_back(AttrName(name)); };
     COMMON_METHODS
 };
 
@@ -266,18 +271,13 @@ struct ExprOpNot : Expr
     COMMON_METHODS
 };
 
-struct ExprBuiltin : Expr
-{
-    Symbol name;
-    ExprBuiltin(const Symbol & name) : name(name) { };
-    COMMON_METHODS
-};
-
 #define MakeBinOp(name, s) \
     struct Expr##name : Expr \
     { \
+        Pos pos; \
         Expr * e1, * e2; \
         Expr##name(Expr * e1, Expr * e2) : e1(e1), e2(e2) { }; \
+        Expr##name(const Pos & pos, Expr * e1, Expr * e2) : pos(pos), e1(e1), e2(e2) { }; \
         void show(std::ostream & str) \
         { \
             str << *e1 << " " s " " << *e2; \
@@ -300,10 +300,11 @@ MakeBinOp(OpConcatLists, "++")
 
 struct ExprConcatStrings : Expr
 {
+    Pos pos;
     bool forceString;
     vector<Expr *> * es;
-    ExprConcatStrings(bool forceString, vector<Expr *> * es)
-        : forceString(forceString), es(es) { };
+    ExprConcatStrings(const Pos & pos, bool forceString, vector<Expr *> * es)
+        : pos(pos), forceString(forceString), es(es) { };
     COMMON_METHODS
 };
 
@@ -326,7 +327,6 @@ struct StaticEnv
     Vars vars;
     StaticEnv(bool isWith, const StaticEnv * up) : isWith(isWith), up(up) { };
 };
-
 
 
 }

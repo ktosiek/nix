@@ -3,14 +3,15 @@ check:
 
 nix_tests = \
   init.sh hash.sh lang.sh add.sh simple.sh dependencies.sh \
-  parallel.sh build-hook.sh substitutes.sh substitutes2.sh \
+  build-hook.sh substitutes.sh substitutes2.sh \
   fallback.sh nix-push.sh gc.sh gc-concurrent.sh nix-pull.sh \
   referrers.sh user-envs.sh logging.sh nix-build.sh misc.sh fixed.sh \
   gc-runtime.sh install-package.sh check-refs.sh filter-source.sh \
   remote-store.sh export.sh export-graph.sh negative-caching.sh \
   binary-patching.sh timeout.sh secure-drv-outputs.sh nix-channel.sh \
   multiple-outputs.sh import-derivation.sh fetchurl.sh optimise-store.sh \
-  binary-cache.sh nix-profile.sh repair.sh dump-db.sh
+  binary-cache.sh nix-profile.sh repair.sh dump-db.sh case-hack.sh
+  # parallel.sh
 
 install-tests += $(foreach x, $(nix_tests), tests/$(x))
 

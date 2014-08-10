@@ -13,7 +13,7 @@ string DrvInfo::queryDrvPath()
     if (drvPath == "" && attrs) {
         Bindings::iterator i = attrs->find(state->sDrvPath);
         PathSet context;
-        drvPath = i != attrs->end() ? state->coerceToPath(*i->value, context) : "";
+        drvPath = i != attrs->end() ? state->coerceToPath(*i->pos, *i->value, context) : "";
     }
     return drvPath;
 }
@@ -24,7 +24,7 @@ string DrvInfo::queryOutPath()
     if (outPath == "" && attrs) {
         Bindings::iterator i = attrs->find(state->sOutPath);
         PathSet context;
-        outPath = i != attrs->end() ? state->coerceToPath(*i->value, context) : "";
+        outPath = i != attrs->end() ? state->coerceToPath(*i->pos, *i->value, context) : "";
     }
     return outPath;
 }
@@ -36,12 +36,12 @@ DrvInfo::Outputs DrvInfo::queryOutputs()
         /* Get the ‘outputs’ list. */
         Bindings::iterator i;
         if (attrs && (i = attrs->find(state->sOutputs)) != attrs->end()) {
-            state->forceList(*i->value);
+            state->forceList(*i->value, *i->pos);
 
             /* For each output... */
             for (unsigned int j = 0; j < i->value->list.length; ++j) {
                 /* Evaluate the corresponding set. */
-                string name = state->forceStringNoCtx(*i->value->list.elems[j]);
+                string name = state->forceStringNoCtx(*i->value->list.elems[j], *i->pos);
                 Bindings::iterator out = attrs->find(state->symbols.create(name));
                 if (out == attrs->end()) continue; // FIXME: throw error?
                 state->forceAttrs(*out->value);
@@ -50,7 +50,7 @@ DrvInfo::Outputs DrvInfo::queryOutputs()
                 Bindings::iterator outPath = out->value->attrs->find(state->sOutPath);
                 if (outPath == out->value->attrs->end()) continue; // FIXME: throw error?
                 PathSet context;
-                outputs[name] = state->coerceToPath(*outPath->value, context);
+                outputs[name] = state->coerceToPath(*outPath->pos, *outPath->value, context);
             }
         } else
             outputs["out"] = queryOutPath();
@@ -75,7 +75,7 @@ Bindings * DrvInfo::getMeta()
     if (!attrs) return 0;
     Bindings::iterator a = attrs->find(state->sMeta);
     if (a == attrs->end()) return 0;
-    state->forceAttrs(*a->value);
+    state->forceAttrs(*a->value, *a->pos);
     meta = a->value->attrs;
     return meta;
 }
@@ -199,11 +199,8 @@ static bool getDerivation(EvalState & state, Value & v,
 
         Bindings::iterator i2 = v.attrs->find(state.sSystem);
 
-        DrvInfo drv(
-            state,
-            state.forceStringNoCtx(*i->value),
-            attrPath,
-            i2 == v.attrs->end() ? "unknown" : state.forceStringNoCtx(*i2->value),
+        DrvInfo drv(state, state.forceStringNoCtx(*i->value), attrPath,
+            i2 == v.attrs->end() ? "unknown" : state.forceStringNoCtx(*i2->value, *i2->pos),
             v.attrs);
 
         drvs.push_back(drv);

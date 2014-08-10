@@ -110,7 +110,7 @@ static void initAndRun(int argc, char * * argv)
     /* Catch SIGINT. */
     struct sigaction act;
     act.sa_handler = sigintHandler;
-    sigfillset(&act.sa_mask);
+    sigemptyset(&act.sa_mask);
     act.sa_flags = 0;
     if (sigaction(SIGINT, &act, 0))
         throw SysError("installing handler for SIGINT");
@@ -220,6 +220,13 @@ static void initAndRun(int argc, char * * argv)
             string value = *i;
             settings.set(name, value);
         }
+        else if (arg == "--arg" || arg == "--argstr") {
+            remaining.push_back(arg);
+            ++i; if (i == args.end()) throw UsageError(format("`%1%' requires two arguments") % arg);
+            remaining.push_back(*i);
+            ++i; if (i == args.end()) throw UsageError(format("`%1%' requires two arguments") % arg);
+            remaining.push_back(*i);
+        }
         else remaining.push_back(arg);
     }
 
@@ -237,9 +244,9 @@ static void initAndRun(int argc, char * * argv)
 
 void showManPage(const string & name)
 {
-    string cmd = "man " + name;
-    if (system(cmd.c_str()) != 0)
-        throw Error(format("command `%1%' failed") % cmd);
+    restoreSIGPIPE();
+    execlp("man", "man", name.c_str(), NULL);
+    throw SysError(format("command `man %1%' failed") % name.c_str());
 }
 
 

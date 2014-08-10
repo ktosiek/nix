@@ -89,10 +89,6 @@ AC_CHECK_HEADERS([sys/mount.h], [], [],
 ])
 
 
-# Check for vfork.
-#AC_FUNC_FORK()
-
-
 # Check for lutimes, optionally used for changing the mtime of
 # symlinks.
 AC_CHECK_FUNCS([lutimes])
@@ -132,12 +128,6 @@ AC_CHECK_HEADERS([sys/personality.h])
 
 # Check for <linux/fs.h> (for immutable file support).
 AC_CHECK_HEADERS([linux/fs.h])
-
-
-# Check for tr1/unordered_set.
-AC_LANG_PUSH(C++)
-AC_CHECK_HEADERS([tr1/unordered_set])
-AC_LANG_POP(C++)
 
 
 AC_DEFUN([NEED_PROG],

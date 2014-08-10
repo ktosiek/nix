@@ -19,7 +19,7 @@ let
         name = "nix-tarball";
         version = builtins.readFile ./version;
         versionSuffix = if officialRelease then "" else "pre${toString nix.revCount}_${nix.shortRev}";
-        src = nix;
+        src = if lib.inNixShell then null else nix;
         inherit officialRelease;
 
         buildInputs =
@@ -92,6 +92,14 @@ let
           --enable-gc
           --sysconfdir=/etc
         '';
+
+        # Provide a default value for the ‘build-chroot-dirs’ setting
+        # that includes /bin/sh pointing to bash.
+        preHook = lib.optionalString stdenv.isLinux (
+          let sh = stdenv.shell; in
+          ''
+            export DEFAULT_CHROOT_DIRS="/bin/sh=${sh} $(tr '\n' ' ' < ${writeReferencesToFile sh})"
+          '');
 
         enableParallelBuilding = true;
 
@@ -189,8 +197,6 @@ let
     deb_debian7i386 = makeDeb_i686 (diskImageFuns: diskImageFuns.debian7i386) 60;
     deb_debian7x86_64 = makeDeb_x86_64 (diskImageFunsFun: diskImageFunsFun.debian7x86_64) 60;
 
-    deb_ubuntu1010i386 = makeDeb_i686 (diskImageFuns: diskImageFuns.ubuntu1010i386) 50;
-    deb_ubuntu1010x86_64 = makeDeb_x86_64 (diskImageFuns: diskImageFuns.ubuntu1010x86_64) 50;
     deb_ubuntu1110i386 = makeDeb_i686 (diskImageFuns: diskImageFuns.ubuntu1110i386) 60;
     deb_ubuntu1110x86_64 = makeDeb_x86_64 (diskImageFuns: diskImageFuns.ubuntu1110x86_64) 60;
     deb_ubuntu1204i386 = makeDeb_i686 (diskImageFuns: diskImageFuns.ubuntu1204i386) 60;
@@ -201,6 +207,8 @@ let
     deb_ubuntu1304x86_64 = makeDeb_x86_64 (diskImageFuns: diskImageFuns.ubuntu1304x86_64) 80;
     deb_ubuntu1310i386 = makeDeb_i686 (diskImageFuns: diskImageFuns.ubuntu1310i386) 90;
     deb_ubuntu1310x86_64 = makeDeb_x86_64 (diskImageFuns: diskImageFuns.ubuntu1310x86_64) 90;
+    deb_ubuntu1404i386 = makeDeb_i686 (diskImageFuns: diskImageFuns.ubuntu1404i386) 90;
+    deb_ubuntu1404x86_64 = makeDeb_x86_64 (diskImageFuns: diskImageFuns.ubuntu1404x86_64) 90;
 
 
     # System tests.
@@ -235,6 +243,8 @@ let
           deb_ubuntu1304x86_64
           deb_ubuntu1310i386
           deb_ubuntu1310x86_64
+          deb_ubuntu1404i386
+          deb_ubuntu1404x86_64
           rpm_fedora19i386
           rpm_fedora19x86_64
           rpm_fedora20i386

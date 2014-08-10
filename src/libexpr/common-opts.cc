@@ -35,11 +35,11 @@ bool parseOptionArg(const string & arg, Strings::iterator & i,
 
 
 bool parseSearchPathArg(const string & arg, Strings::iterator & i,
-    const Strings::iterator & argsEnd, EvalState & state)
+    const Strings::iterator & argsEnd, Strings & searchPath)
 {
     if (arg != "-I") return false;
     if (i == argsEnd) throw UsageError(format("`%1%' requires an argument") % arg);;
-    state.addToSearchPath(*i++, true);
+    searchPath.push_back(*i++);
     return true;
 }
 
@@ -48,9 +48,7 @@ Path lookupFileArg(EvalState & state, string s)
 {
     if (s.size() > 2 && s.at(0) == '<' && s.at(s.size() - 1) == '>') {
         Path p = s.substr(1, s.size() - 2);
-        Path p2 = state.findFile(p);
-        if (p2 == "") throw Error(format("file `%1%' was not found in the Nix search path (add it using $NIX_PATH or -I)") % p);
-        return p2;
+        return state.findFile(p);
     } else
         return absPath(s);
 }

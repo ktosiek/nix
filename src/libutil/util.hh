@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <signal.h>
+#include <functional>
 
 #include <cstdio>
 
@@ -63,7 +64,18 @@ bool isLink(const Path & path);
 
 /* Read the contents of a directory.  The entries `.' and `..' are
    removed. */
-Strings readDirectory(const Path & path);
+struct DirEntry
+{
+    string name;
+    ino_t ino;
+    unsigned char type; // one of DT_*
+    DirEntry(const string & name, ino_t ino, unsigned char type)
+        : name(name), ino(ino), type(type) { }
+};
+
+typedef vector<DirEntry> DirEntries;
+
+DirEntries readDirectory(const Path & path);
 
 /* Read the contents of a file into a string. */
 string readFile(int fd);
@@ -237,10 +249,11 @@ class Pid
     int killSignal;
 public:
     Pid();
+    Pid(pid_t pid);
     ~Pid();
     void operator =(pid_t pid);
     operator pid_t();
-    void kill();
+    void kill(bool quiet = false);
     int wait(bool block);
     void setSeparatePG(bool separatePG);
     void setKillSignal(int signal);
@@ -252,10 +265,17 @@ public:
 void killUser(uid_t uid);
 
 
+/* Fork a process that runs the given function, and return the child
+   pid to the caller. */
+pid_t startProcess(std::function<void()> fun, const string & errorPrefix = "error: ");
+
+
 /* Run a program and return its stdout in a string (i.e., like the
    shell backtick operator). */
 string runProgram(Path program, bool searchPath = false,
     const Strings & args = Strings());
+
+MakeError(ExecError, Error)
 
 /* Close all file descriptors except stdin, stdout, stderr, and those
    listed in the given set.  Good practice in child processes. */
@@ -264,8 +284,9 @@ void closeMostFDs(const set<int> & exceptions);
 /* Set the close-on-exec flag for the given file descriptor. */
 void closeOnExec(int fd);
 
-/* Call vfork() if available, otherwise fork(). */
-extern pid_t (*maybeVfork)();
+/* Restore default handling of SIGPIPE, otherwise some programs will
+   randomly say "Broken pipe". */
+void restoreSIGPIPE();
 
 
 /* User interruption. */
@@ -325,6 +346,8 @@ bool hasSuffix(const string & s, const string & suffix);
 
 /* Read string `s' from stream `str'. */
 void expect(std::istream & str, const string & s);
+
+MakeError(FormatError, Error)
 
 
 /* Read a C-style string from stream `str'. */

@@ -123,11 +123,6 @@ void ExprOpNot::show(std::ostream & str)
     str << "! " << *e;
 }
 
-void ExprBuiltin::show(std::ostream & str)
-{
-    str << "builtins." << name;
-}
-
 void ExprConcatStrings::show(std::ostream & str)
 {
     bool first = true;
@@ -145,10 +140,10 @@ void ExprPos::show(std::ostream & str)
 
 std::ostream & operator << (std::ostream & str, const Pos & pos)
 {
-    if (!pos.line)
+    if (!pos)
         str << "undefined position";
     else
-        str << (format("`%1%:%2%:%3%'") % pos.file % pos.line % pos.column).str();
+        str << (format("%1%:%2%:%3%") % pos.file % pos.line % pos.column).str();
     return str;
 }
 
@@ -242,9 +237,10 @@ void ExprOpHasAttr::bindVars(const StaticEnv & env)
 
 void ExprAttrs::bindVars(const StaticEnv & env)
 {
-    const StaticEnv *dynamicEnv = &env;
+    const StaticEnv * dynamicEnv = &env;
+    StaticEnv newEnv(false, &env);
+
     if (recursive) {
-        StaticEnv newEnv(false, &env);
         dynamicEnv = &newEnv;
 
         unsigned int displ = 0;
@@ -341,10 +337,6 @@ void ExprOpNot::bindVars(const StaticEnv & env)
     e->bindVars(env);
 }
 
-void ExprBuiltin::bindVars(const StaticEnv & env)
-{
-}
-
 void ExprConcatStrings::bindVars(const StaticEnv & env)
 {
     foreach (vector<Expr *>::iterator, i, *es)
@@ -372,7 +364,7 @@ void ExprLambda::setName(Symbol & name)
 
 string ExprLambda::showNamePos() const
 {
-    return (format("%1% at %2%") % (name.set() ? "`" + (string) name + "'" : "an anonymous function") % pos).str();
+    return (format("%1% at %2%") % (name.set() ? "`" + (string) name + "'" : "anonymous function") % pos).str();
 }
 
 

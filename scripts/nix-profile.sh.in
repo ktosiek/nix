@@ -1,4 +1,4 @@
-if test -n "$HOME"; then
+if [ -n "$HOME" ]; then
     export NIX_USER_PROFILE_DIR="@localstatedir@/nix/profiles/per-user/$USER"
     export NIX_REMOTE=daemon
     OLD_PATH=$PATH
@@ -41,4 +41,18 @@ if test -n "$HOME"; then
     fi
 
     export PATH=$HOME/.nix-profile/bin:$HOME/.nix-profile/sbin:$OLD_PATH
+
+    # Append ~/.nix-defexpr/channels/nixpkgs to $NIX_PATH so that
+    # <nixpkgs> paths work when the user has fetched the Nixpkgs
+    # channel.
+    export NIX_PATH=${NIX_PATH:+$NIX_PATH:}nixpkgs=$HOME/.nix-defexpr/channels/nixpkgs
+
+    # Set $SSL_CERT_FILE so that Nixpkgs applications like curl work.
+    if [ -e /etc/ssl/certs/ca-bundle.crt ]; then # Fedora, NixOS
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt
+    elif [ -e /etc/ssl/certs/ca-certificates.crt ]; then # Ubuntu, Debian
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    elif [ -e "$NIX_LINK/etc/ca-bundle.crt" ]; then # fall back to Nix profile
+        export SSL_CERT_FILE="$NIX_LINK/etc/ca-bundle.crt"
+    fi
 fi

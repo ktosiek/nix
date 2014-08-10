@@ -8,6 +8,7 @@
 #include "util.hh"
 #include "serve-protocol.hh"
 #include "worker-protocol.hh"
+#include "monitor-fd.hh"
 
 #include <iostream>
 #include <algorithm>
@@ -467,10 +468,11 @@ static void opReadLog(Strings opFlags, Strings opArgs)
     foreach (Strings::iterator, i, opArgs) {
         Path path = useDeriver(followLinksToStorePath(*i));
 
-        for (int j = 0; j <= 2; j++) {
-            if (j == 2) throw Error(format("build log of derivation `%1%' is not available") % path);
+        string baseName = baseNameOf(path);
+        bool found = false;
 
-            string baseName = baseNameOf(path);
+        for (int j = 0; j < 2; j++) {
+
             Path logPath =
                 j == 0
                 ? (format("%1%/%2%/%3%/%4%") % settings.nixLogDir % drvsLogDir % string(baseName, 0, 2) % string(baseName, 2)).str()
@@ -481,6 +483,7 @@ static void opReadLog(Strings opFlags, Strings opArgs)
                 /* !!! Make this run in O(1) memory. */
                 string log = readFile(logPath);
                 writeFull(STDOUT_FILENO, (const unsigned char *) log.data(), log.size());
+                found = true;
                 break;
             }
 
@@ -500,9 +503,30 @@ static void opReadLog(Strings opFlags, Strings opArgs)
                     writeFull(STDOUT_FILENO, buf, n);
                 } while (err != BZ_STREAM_END);
                 BZ2_bzReadClose(&err, bz);
+                found = true;
                 break;
             }
         }
+
+        if (!found) {
+            for (auto & i : settings.logServers) {
+                string prefix = i;
+                if (!prefix.empty() && prefix.back() != '/') prefix += '/';
+                string url = prefix + baseName;
+                try {
+                    string log = runProgram(CURL, true, {"--fail", "--location", "--silent", "--", url});
+                    std::cout << "(using build log from " << url << ")" << std::endl;
+                    std::cout << log;
+                    found = true;
+                    break;
+                } catch (ExecError & e) {
+                    /* Ignore errors from curl. FIXME: actually, might be
+                       nice to print a warning on HTTP status != 404. */
+                }
+            }
+        }
+
+        if (!found) throw Error(format("build log of derivation `%1%' is not available") % path);
     }
 }
 
@@ -801,11 +825,9 @@ static void opRepairPath(Strings opFlags, Strings opArgs)
 static void showOptimiseStats(OptimiseStats & stats)
 {
     printMsg(lvlError,
-        format("%1% freed by hard-linking %2% files; there are %3% files with equal contents out of %4% files in total")
+        format("%1% freed by hard-linking %2% files")
         % showBytes(stats.bytesFreed)
-        % stats.filesLinked
-        % stats.sameContents
-        % stats.totalFiles);
+        % stats.filesLinked);
 }
 
 
@@ -848,8 +870,12 @@ static void opClearFailedPaths(Strings opFlags, Strings opArgs)
 /* Serve the nix store in a way usable by a restricted ssh user. */
 static void opServe(Strings opFlags, Strings opArgs)
 {
-    if (!opArgs.empty() || !opFlags.empty())
-        throw UsageError("no arguments or flags expected");
+    bool writeAllowed = false;
+    foreach (Strings::iterator, i, opFlags)
+        if (*i == "--write") writeAllowed = true;
+        else throw UsageError(format("unknown flag `%1%'") % *i);
+
+    if (!opArgs.empty()) throw UsageError("no arguments expected");
 
     FdSource in(STDIN_FILENO);
     FdSink out(STDOUT_FILENO);
@@ -862,50 +888,128 @@ static void opServe(Strings opFlags, Strings opArgs)
     out.flush();
     readInt(in); // Client version, unused for now
 
-    ServeCommand cmd = (ServeCommand) readInt(in);
-    switch (cmd) {
-        case cmdQuery:
-            while (true) {
-                QueryCommand qCmd;
-                try {
-                    qCmd = (QueryCommand) readInt(in);
-                } catch (EndOfFile & e) {
-                    break;
-                }
-                switch (qCmd) {
-                    case qCmdHave: {
-                        PathSet paths = readStorePaths<PathSet>(in);
-                        writeStrings(store->queryValidPaths(paths), out);
-                        break;
-                    }
-                    case qCmdInfo: {
-                        PathSet paths = readStorePaths<PathSet>(in);
-                        // !!! Maybe we want a queryPathInfos?
-                        foreach (PathSet::iterator, i, paths) {
-                            if (!store->isValidPath(*i))
-                                continue;
-                            ValidPathInfo info = store->queryPathInfo(*i);
-                            writeString(info.path, out);
-                            writeString(info.deriver, out);
-                            writeStrings(info.references, out);
-                            // !!! Maybe we want compression?
-                            writeLongLong(info.narSize, out); // downloadSize
-                            writeLongLong(info.narSize, out);
+    while (true) {
+        ServeCommand cmd;
+        try {
+            cmd = (ServeCommand) readInt(in);
+        } catch (EndOfFile & e) {
+            break;
+        }
+
+        switch (cmd) {
+
+            case cmdQueryValidPaths: {
+                bool lock = readInt(in);
+                bool substitute = readInt(in);
+                PathSet paths = readStorePaths<PathSet>(in);
+                if (lock && writeAllowed)
+                    for (auto & path : paths)
+                        store->addTempRoot(path);
+
+                /* If requested, substitute missing paths. This
+                   implements nix-copy-closure's --use-substitutes
+                   flag. */
+                if (substitute && writeAllowed) {
+                    /* Filter out .drv files (we don't want to build anything). */
+                    PathSet paths2;
+                    for (auto & path : paths)
+                        if (!isDerivation(path)) paths2.insert(path);
+                    unsigned long long downloadSize, narSize;
+                    PathSet willBuild, willSubstitute, unknown;
+                    queryMissing(*store, PathSet(paths2.begin(), paths2.end()),
+                        willBuild, willSubstitute, unknown, downloadSize, narSize);
+                    /* FIXME: should use ensurePath(), but it only
+                       does one path at a time. */
+                    if (!willSubstitute.empty())
+                        try {
+                            store->buildPaths(willSubstitute);
+                        } catch (Error & e) {
+                            printMsg(lvlError, format("warning: %1%") % e.msg());
                         }
-                        writeString("", out);
-                        break;
-                    }
-                    default:
-                        throw Error(format("unknown serve query `%1%'") % cmd);
                 }
-                out.flush();
+
+                writeStrings(store->queryValidPaths(paths), out);
+                break;
             }
-            break;
-        case cmdSubstitute:
-            dumpPath(readString(in), out);
-            break;
-        default:
-            throw Error(format("unknown serve command `%1%'") % cmd);
+
+            case cmdQueryPathInfos: {
+                PathSet paths = readStorePaths<PathSet>(in);
+                // !!! Maybe we want a queryPathInfos?
+                foreach (PathSet::iterator, i, paths) {
+                    if (!store->isValidPath(*i))
+                        continue;
+                    ValidPathInfo info = store->queryPathInfo(*i);
+                    writeString(info.path, out);
+                    writeString(info.deriver, out);
+                    writeStrings(info.references, out);
+                    // !!! Maybe we want compression?
+                    writeLongLong(info.narSize, out); // downloadSize
+                    writeLongLong(info.narSize, out);
+                }
+                writeString("", out);
+                break;
+            }
+
+            case cmdDumpStorePath:
+                dumpPath(readStorePath(in), out);
+                break;
+
+            case cmdImportPaths: {
+                if (!writeAllowed) throw Error("importing paths is not allowed");
+                store->importPaths(false, in);
+                writeInt(1, out); // indicate success
+                break;
+            }
+
+            case cmdExportPaths: {
+                bool sign = readInt(in);
+                Paths sorted = topoSortPaths(*store, readStorePaths<PathSet>(in));
+                reverse(sorted.begin(), sorted.end());
+                exportPaths(*store, sorted, sign, out);
+                break;
+            }
+
+            case cmdBuildPaths: {
+
+                /* Used by build-remote.pl. */
+                if (!writeAllowed) throw Error("building paths is not allowed");
+                PathSet paths = readStorePaths<PathSet>(in);
+
+                // FIXME: changing options here doesn't work if we're
+                // building through the daemon.
+                verbosity = lvlError;
+                settings.keepLog = false;
+                settings.useSubstitutes = false;
+                settings.maxSilentTime = readInt(in);
+                settings.buildTimeout = readInt(in);
+
+                try {
+                    MonitorFdHup monitor(in.fd);
+                    store->buildPaths(paths);
+                    writeInt(0, out);
+                } catch (Error & e) {
+                    assert(e.status);
+                    writeInt(e.status, out);
+                    writeString(e.msg(), out);
+                }
+                break;
+            }
+
+            case cmdQueryClosure: {
+                bool includeOutputs = readInt(in);
+                PathSet paths = readStorePaths<PathSet>(in);
+                PathSet closure;
+                for (auto & i : paths)
+                    computeFSClosure(*store, i, closure, false, includeOutputs);
+                writeStrings(closure, out);
+                break;
+            }
+
+            default:
+                throw Error(format("unknown serve command %1%") % cmd);
+        }
+
+        out.flush();
     }
 }
 

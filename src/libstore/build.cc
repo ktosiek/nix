@@ -12,10 +12,8 @@
 #include <map>
 #include <sstream>
 #include <algorithm>
-#include <boost/shared_ptr.hpp>
-#include <boost/weak_ptr.hpp>
-#include <boost/enable_shared_from_this.hpp>
 
+#include <limits.h>
 #include <time.h>
 #include <sys/time.h>
 #include <sys/wait.h>
@@ -84,19 +82,19 @@ struct HookInstance;
 
 /* A pointer to a goal. */
 class Goal;
-typedef boost::shared_ptr<Goal> GoalPtr;
-typedef boost::weak_ptr<Goal> WeakGoalPtr;
+typedef std::shared_ptr<Goal> GoalPtr;
+typedef std::weak_ptr<Goal> WeakGoalPtr;
 
 /* Set of goals. */
 typedef set<GoalPtr> Goals;
-typedef set<WeakGoalPtr> WeakGoals;
+typedef list<WeakGoalPtr> WeakGoals;
 
 /* A map of paths to goals (and the other way around). */
 typedef map<Path, WeakGoalPtr> WeakGoalMap;
 
 
 
-class Goal : public boost::enable_shared_from_this<Goal>
+class Goal : public std::enable_shared_from_this<Goal>
 {
 public:
     typedef enum {ecBusy, ecSuccess, ecFailed, ecNoSubstituters, ecIncompleteClosure} ExitCode;
@@ -242,7 +240,7 @@ public:
 
     LocalStore & store;
 
-    boost::shared_ptr<HookInstance> hook;
+    std::shared_ptr<HookInstance> hook;
 
     Worker(LocalStore & store);
     ~Worker();
@@ -300,10 +298,19 @@ public:
 //////////////////////////////////////////////////////////////////////
 
 
+void addToWeakGoals(WeakGoals & goals, GoalPtr p)
+{
+    // FIXME: necessary?
+    foreach (WeakGoals::iterator, i, goals)
+        if (i->lock() == p) return;
+    goals.push_back(p);
+}
+
+
 void Goal::addWaitee(GoalPtr waitee)
 {
     waitees.insert(waitee);
-    waitee->waiters.insert(shared_from_this());
+    addToWeakGoals(waitee->waiters, shared_from_this());
 }
 
 
@@ -329,7 +336,7 @@ void Goal::waiteeDone(GoalPtr waitee, ExitCode result)
             GoalPtr goal = *i;
             WeakGoals waiters2;
             foreach (WeakGoals::iterator, j, goal->waiters)
-                if (j->lock() != shared_from_this()) waiters2.insert(*j);
+                if (j->lock() != shared_from_this()) waiters2.push_back(*j);
             goal->waiters = waiters2;
         }
         waitees.clear();
@@ -367,8 +374,6 @@ void Goal::trace(const format & f)
 /* Common initialisation performed in child processes. */
 static void commonChildInit(Pipe & logPipe)
 {
-    restoreAffinity();
-
     /* Put the child in a separate session (and thus a separate
        process group) so that it has no controlling terminal (meaning
        that e.g. ssh cannot open /dev/tty) and it doesn't receive
@@ -403,17 +408,6 @@ const char * * strings2CharPtrs(const Strings & ss)
     foreach (Strings::const_iterator, i, ss) *p++ = i->c_str();
     *p = 0;
     return arr;
-}
-
-
-/* Restore default handling of SIGPIPE, otherwise some programs will
-   randomly say "Broken pipe". */
-static void restoreSIGPIPE()
-{
-    struct sigaction act, oact;
-    act.sa_handler = SIG_DFL;
-    act.sa_flags = 0;
-    if (sigaction(SIGPIPE, &act, &oact)) throw SysError("resetting SIGPIPE");
 }
 
 
@@ -582,7 +576,9 @@ HookInstance::HookInstance()
 {
     debug("starting build hook");
 
-    Path buildHook = absPath(getEnv("NIX_BUILD_HOOK"));
+    Path buildHook = getEnv("NIX_BUILD_HOOK");
+    if (string(buildHook, 0, 1) != "/") buildHook = settings.nixLibexecDir + "/nix/" + buildHook;
+    buildHook = canonPath(buildHook);
 
     /* Create a pipe to get the output of the child. */
     fromHook.create();
@@ -594,42 +590,29 @@ HookInstance::HookInstance()
     builderOut.create();
 
     /* Fork the hook. */
-    pid = maybeVfork();
-    switch (pid) {
+    pid = startProcess([&]() {
 
-    case -1:
-        throw SysError("unable to fork");
+        commonChildInit(fromHook);
 
-    case 0:
-        try { /* child */
+        if (chdir("/") == -1) throw SysError("changing into `/");
 
-            commonChildInit(fromHook);
+        /* Dup the communication pipes. */
+        if (dup2(toHook.readSide, STDIN_FILENO) == -1)
+            throw SysError("dupping to-hook read side");
 
-            if (chdir("/") == -1) throw SysError("changing into `/");
+        /* Use fd 4 for the builder's stdout/stderr. */
+        if (dup2(builderOut.writeSide, 4) == -1)
+            throw SysError("dupping builder's stdout/stderr");
 
-            /* Dup the communication pipes. */
-            if (dup2(toHook.readSide, STDIN_FILENO) == -1)
-                throw SysError("dupping to-hook read side");
+        execl(buildHook.c_str(), buildHook.c_str(), settings.thisSystem.c_str(),
+            (format("%1%") % settings.maxSilentTime).str().c_str(),
+            (format("%1%") % settings.printBuildTrace).str().c_str(),
+            (format("%1%") % settings.buildTimeout).str().c_str(),
+            NULL);
 
-            /* Use fd 4 for the builder's stdout/stderr. */
-            if (dup2(builderOut.writeSide, 4) == -1)
-                throw SysError("dupping builder's stdout/stderr");
+        throw SysError(format("executing `%1%'") % buildHook);
+    });
 
-            execl(buildHook.c_str(), buildHook.c_str(), settings.thisSystem.c_str(),
-                (format("%1%") % settings.maxSilentTime).str().c_str(),
-                (format("%1%") % settings.printBuildTrace).str().c_str(),
-                (format("%1%") % settings.buildTimeout).str().c_str(),
-                NULL);
-
-            throw SysError(format("executing `%1%'") % buildHook);
-
-        } catch (std::exception & e) {
-            writeToStderr("build hook error: " + string(e.what()) + "\n");
-        }
-        _exit(1);
-    }
-
-    /* parent */
     pid.setSeparatePG(true);
     pid.setKillSignal(SIGTERM);
     fromHook.writeSide.close();
@@ -640,7 +623,7 @@ HookInstance::HookInstance()
 HookInstance::~HookInstance()
 {
     try {
-        pid.kill();
+        pid.kill(true);
     } catch (...) {
         ignoreException();
     }
@@ -734,7 +717,7 @@ private:
     Pipe builderOut;
 
     /* The build hook. */
-    boost::shared_ptr<HookInstance> hook;
+    std::shared_ptr<HookInstance> hook;
 
     /* Whether we're currently doing a chroot build. */
     bool useChroot;
@@ -742,7 +725,7 @@ private:
     Path chrootRootDir;
 
     /* RAII object to delete the chroot directory. */
-    boost::shared_ptr<AutoDelete> autoDelChroot;
+    std::shared_ptr<AutoDelete> autoDelChroot;
 
     /* All inputs that are regular files. */
     PathSet regularInputPaths;
@@ -775,11 +758,6 @@ private:
        for this build's outputs.  This needs to be shared between
        outputs to allow hard links between outputs. */
     InodesSeen inodesSeen;
-
-    /* Magic exit code denoting that setting up the child environment
-       failed.  (It's possible that the child actually returns the
-       exit code, but ah well.) */
-    const static int childSetupFailed = 189;
 
 public:
     DerivationGoal(const Path & drvPath, const StringSet & wantedOutputs, Worker & worker, BuildMode buildMode = bmNormal);
@@ -1425,9 +1403,6 @@ void DerivationGoal::buildDone()
                     if (pathExists(chrootRootDir + *i))
                         rename((chrootRootDir + *i).c_str(), i->c_str());
 
-            if (WIFEXITED(status) && WEXITSTATUS(status) == childSetupFailed)
-                throw Error(format("failed to set up the build environment for `%1%'") % drvPath);
-
             if (diskFull)
                 printMsg(lvlError, "note: build failure may have been caused by lack of free disk space");
 
@@ -1511,7 +1486,7 @@ HookReply DerivationGoal::tryBuildHook()
     if (!settings.useBuildHook || getEnv("NIX_BUILD_HOOK") == "") return rpDecline;
 
     if (!worker.hook)
-        worker.hook = boost::shared_ptr<HookInstance>(new HookInstance);
+        worker.hook = std::shared_ptr<HookInstance>(new HookInstance);
 
     /* Tell the hook about system features (beyond the system type)
        required from the build machine.  (The hook could parse the
@@ -1783,7 +1758,7 @@ void DerivationGoal::startBuilder()
         if (pathExists(chrootRootDir)) deletePath(chrootRootDir);
 
         /* Clean up the chroot directory automatically. */
-        autoDelChroot = boost::shared_ptr<AutoDelete>(new AutoDelete(chrootRootDir));
+        autoDelChroot = std::shared_ptr<AutoDelete>(new AutoDelete(chrootRootDir));
 
         printMsg(lvlChatty, format("setting up chroot environment in `%1%'") % chrootRootDir);
 
@@ -1817,12 +1792,15 @@ void DerivationGoal::startBuilder()
 
         /* Bind-mount a user-configurable set of directories from the
            host file system. */
-        foreach (StringSet::iterator, i, settings.dirsInChroot) {
-            size_t p = i->find('=');
+        PathSet dirs = tokenizeString<StringSet>(settings.get("build-chroot-dirs", DEFAULT_CHROOT_DIRS));
+        PathSet dirs2 = tokenizeString<StringSet>(settings.get("build-extra-chroot-dirs", ""));
+        dirs.insert(dirs2.begin(), dirs2.end());
+        for (auto & i : dirs) {
+            size_t p = i.find('=');
             if (p == string::npos)
-                dirsInChroot[*i] = *i;
+                dirsInChroot[i] = i;
             else
-                dirsInChroot[string(*i, 0, p)] = string(*i, p + 1);
+                dirsInChroot[string(i, 0, p)] = string(i, p + 1);
         }
         dirsInChroot[tmpDir] = tmpDir;
 
@@ -1961,10 +1939,15 @@ void DerivationGoal::startBuilder()
     worker.childStarted(shared_from_this(), pid,
         singleton<set<int> >(builderOut.readSide), true, true);
 
+    /* Check if setting up the build environment failed. */
+    string msg = readLine(builderOut.readSide);
+    if (!msg.empty()) throw Error(msg);
+
     if (settings.printBuildTrace) {
         printMsg(lvlError, format("@ build-started %1% - %2% %3%")
             % drvPath % drv.platform % logFile);
     }
+
 }
 
 
@@ -1973,9 +1956,13 @@ void DerivationGoal::initChild()
     /* Warning: in the child we should absolutely not make any SQLite
        calls! */
 
-    bool inSetup = true;
-
     try { /* child */
+
+        _writeToStderr = 0;
+
+        restoreAffinity();
+
+        commonChildInit(builderOut);
 
 #if CHROOT_ENABLED
         if (useChroot) {
@@ -2079,6 +2066,10 @@ void DerivationGoal::initChild()
                 if (mount("none", (chrootRootDir + "/dev/pts").c_str(), "devpts", 0, "newinstance,mode=0620") == -1)
                     throw SysError("mounting /dev/pts");
                 createSymlink("/dev/pts/ptmx", chrootRootDir + "/dev/ptmx");
+
+                /* Make sure /dev/pts/ptmx is world-writable.  With some
+                   Linux versions, it is created with permissions 0.  */
+                chmod_(chrootRootDir + "/dev/pts/ptmx", 0666);
             }
 
             /* Do the chroot().  Below we do a chdir() to the
@@ -2090,8 +2081,6 @@ void DerivationGoal::initChild()
                 throw SysError(format("cannot change root directory to `%1%'") % chrootRootDir);
         }
 #endif
-
-        commonChildInit(builderOut);
 
         if (chdir(tmpDir.c_str()) == -1)
             throw SysError(format("changing into `%1%'") % tmpDir);
@@ -2161,15 +2150,17 @@ void DerivationGoal::initChild()
 
         restoreSIGPIPE();
 
+        /* Indicate that we managed to set up the build environment. */
+        writeToStderr("\n");
+
         /* Execute the program.  This should not return. */
-        inSetup = false;
         execve(program.c_str(), (char * *) &args[0], (char * *) envArr);
 
         throw SysError(format("executing `%1%'") % drv.builder);
 
     } catch (std::exception & e) {
-        writeToStderr("build error: " + string(e.what()) + "\n");
-        _exit(inSetup ? childSetupFailed : 1);
+        writeToStderr("while setting up the build environment: " + string(e.what()) + "\n");
+        _exit(1);
     }
 
     abort(); /* never reached */
@@ -2556,7 +2547,7 @@ private:
     Pid pid;
 
     /* Lock on the store path. */
-    boost::shared_ptr<PathLocks> outputLock;
+    std::shared_ptr<PathLocks> outputLock;
 
     /* Whether to try to repair a valid path. */
     bool repair;
@@ -2733,7 +2724,7 @@ void SubstitutionGoal::tryToRun()
     }
 
     /* Acquire a lock on the output path. */
-    outputLock = boost::shared_ptr<PathLocks>(new PathLocks);
+    outputLock = std::shared_ptr<PathLocks>(new PathLocks);
     if (!outputLock->lockPaths(singleton<PathSet>(storePath), "", false)) {
         worker.waitForAWhile(shared_from_this());
         return;
@@ -2769,32 +2760,18 @@ void SubstitutionGoal::tryToRun()
     const char * * argArr = strings2CharPtrs(args);
 
     /* Fork the substitute program. */
-    pid = maybeVfork();
+    pid = startProcess([&]() {
 
-    switch (pid) {
+        commonChildInit(logPipe);
 
-    case -1:
-        throw SysError("unable to fork");
+        if (dup2(outPipe.writeSide, STDOUT_FILENO) == -1)
+            throw SysError("cannot dup output pipe into stdout");
 
-    case 0:
-        try { /* child */
+        execv(sub.c_str(), (char * *) argArr);
 
-            commonChildInit(logPipe);
+        throw SysError(format("executing `%1%'") % sub);
+    });
 
-            if (dup2(outPipe.writeSide, STDOUT_FILENO) == -1)
-                throw SysError("cannot dup output pipe into stdout");
-
-            execv(sub.c_str(), (char * *) argArr);
-
-            throw SysError(format("executing `%1%'") % sub);
-
-        } catch (std::exception & e) {
-            writeToStderr("substitute error: " + string(e.what()) + "\n");
-        }
-        _exit(1);
-    }
-
-    /* parent */
     pid.setSeparatePG(true);
     pid.setKillSignal(SIGTERM);
     outPipe.writeSide.close();
@@ -3011,7 +2988,7 @@ void Worker::removeGoal(GoalPtr goal)
 void Worker::wakeUp(GoalPtr goal)
 {
     goal->trace("woken up");
-    awake.insert(goal);
+    addToWeakGoals(awake, goal);
 }
 
 
@@ -3069,21 +3046,21 @@ void Worker::waitForBuildSlot(GoalPtr goal)
     if (getNrLocalBuilds() < settings.maxBuildJobs)
         wakeUp(goal); /* we can do it right away */
     else
-        wantingToBuild.insert(goal);
+        addToWeakGoals(wantingToBuild, goal);
 }
 
 
 void Worker::waitForAnyGoal(GoalPtr goal)
 {
     debug("wait for any goal");
-    waitingForAnyGoal.insert(goal);
+    addToWeakGoals(waitingForAnyGoal, goal);
 }
 
 
 void Worker::waitForAWhile(GoalPtr goal)
 {
     debug("wait for a while");
-    waitingForAWhile.insert(goal);
+    addToWeakGoals(waitingForAWhile, goal);
 }
 
 
@@ -3228,13 +3205,14 @@ void Worker::waitForInput()
                     printMsg(lvlVomit, format("%1%: read %2% bytes")
                         % goal->getName() % rd);
                     string data((char *) buffer, rd);
-                    goal->handleChildOutput(*k, data);
                     j->second.lastOutput = after;
+                    goal->handleChildOutput(*k, data);
                 }
             }
         }
 
-        if (settings.maxSilentTime != 0 &&
+        if (goal->getExitCode() == Goal::ecBusy &&
+            settings.maxSilentTime != 0 &&
             j->second.respectTimeouts &&
             after - j->second.lastOutput >= (time_t) settings.maxSilentTime)
         {
@@ -3244,7 +3222,8 @@ void Worker::waitForInput()
             goal->cancel(true);
         }
 
-        if (settings.buildTimeout != 0 &&
+        else if (goal->getExitCode() == Goal::ecBusy &&
+            settings.buildTimeout != 0 &&
             j->second.respectTimeouts &&
             after - j->second.timeStarted >= (time_t) settings.buildTimeout)
         {

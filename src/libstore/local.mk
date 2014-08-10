@@ -10,6 +10,10 @@ libstore_LIBS = libutil libformat
 
 libstore_LDFLAGS = -lsqlite3 -lbz2
 
+ifeq ($(OS), SunOS)
+	libstore_LDFLAGS += -lsocket
+endif
+
 libstore_CXXFLAGS = \
  -DNIX_STORE_DIR=\"$(storedir)\" \
  -DNIX_DATA_DIR=\"$(datadir)\" \
@@ -18,7 +22,7 @@ libstore_CXXFLAGS = \
  -DNIX_CONF_DIR=\"$(sysconfdir)/nix\" \
  -DNIX_LIBEXEC_DIR=\"$(libexecdir)\" \
  -DNIX_BIN_DIR=\"$(bindir)\" \
- -DPACKAGE_VERSION=\"$(PACKAGE_VERSION)\"
+ -DDEFAULT_CHROOT_DIRS="\"$(DEFAULT_CHROOT_DIRS)\""
 
 $(d)/local-store.cc: $(d)/schema.sql.hh
 

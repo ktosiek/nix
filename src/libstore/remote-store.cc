@@ -133,8 +133,6 @@ RemoteStore::~RemoteStore()
     try {
         to.flush();
         fdSocket.close();
-        if (child != -1)
-            child.wait(true);
     } catch (...) {
         ignoreException();
     }
@@ -165,6 +163,8 @@ void RemoteStore::setOptions()
 
     if (GET_PROTOCOL_MINOR(daemonVersion) >= 12) {
         Settings::SettingsMap overrides = settings.getOverrides();
+        if (overrides["ssh-auth-sock"] == "")
+            overrides["ssh-auth-sock"] = getEnv("SSH_AUTH_SOCK");
         writeInt(overrides.size(), to);
         foreach (Settings::SettingsMap::iterator, i, overrides) {
             writeString(i->first, to);
@@ -402,8 +402,23 @@ Path RemoteStore::addToStore(const Path & _srcPath,
     writeInt((hashAlgo == htSHA256 && recursive) ? 0 : 1, to);
     writeInt(recursive ? 1 : 0, to);
     writeString(printHashType(hashAlgo), to);
-    dumpPath(srcPath, to, filter);
-    processStderr();
+
+    try {
+        to.written = 0;
+        to.warn = true;
+        dumpPath(srcPath, to, filter);
+        to.warn = false;
+        processStderr();
+    } catch (SysError & e) {
+        /* Daemon closed while we were sending the path. Probably OOM
+           or I/O error. */
+        if (e.errNo == EPIPE)
+            try {
+                processStderr();
+            } catch (EndOfFile & e) { }
+        throw;
+    }
+
     return readStorePath(from);
 }
 

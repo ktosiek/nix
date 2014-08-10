@@ -5,6 +5,7 @@
 #include "get-drvs.hh"
 #include "attr-path.hh"
 #include "value-to-xml.hh"
+#include "value-to-json.hh"
 #include "util.hh"
 #include "store-api.hh"
 #include "common-opts.hh"
@@ -35,9 +36,12 @@ static int rootNr = 0;
 static bool indirectRoot = false;
 
 
+enum OutputKind { okPlain, okXML, okJSON };
+
+
 void processExpr(EvalState & state, const Strings & attrPaths,
     bool parseOnly, bool strict, Bindings & autoArgs,
-    bool evalOnly, bool xmlOutput, bool location, Expr * e)
+    bool evalOnly, OutputKind output, bool location, Expr * e)
 {
     if (parseOnly) {
         std::cout << format("%1%\n") % *e;
@@ -52,14 +56,21 @@ void processExpr(EvalState & state, const Strings & attrPaths,
         state.forceValue(v);
 
         PathSet context;
-        if (evalOnly)
-            if (xmlOutput)
-                printValueAsXML(state, strict, location, v, std::cout, context);
+        if (evalOnly) {
+            Value vRes;
+            if (autoArgs.empty())
+                vRes = v;
+            else
+                state.autoCallFunction(autoArgs, v, vRes);
+            if (output == okXML)
+                printValueAsXML(state, strict, location, vRes, std::cout, context);
+            else if (output == okJSON)
+                printValueAsJSON(state, strict, vRes, std::cout, context);
             else {
-                if (strict) state.strictForceValue(v);
-                std::cout << v << std::endl;
+                if (strict) state.strictForceValue(vRes);
+                std::cout << vRes << std::endl;
             }
-        else {
+        } else {
             DrvInfos drvs;
             getDerivations(state, v, "", autoArgs, drvs, false);
             foreach (DrvInfos::iterator, i, drvs) {
@@ -86,14 +97,24 @@ void processExpr(EvalState & state, const Strings & attrPaths,
 
 void run(Strings args)
 {
-    EvalState state;
+    /* FIXME: hack. */
+    Strings searchPath;
+    Strings args2;
+    for (Strings::iterator i = args.begin(); i != args.end(); ) {
+        string arg = *i++;
+        if (!parseSearchPathArg(arg, i, args.end(), searchPath))
+            args2.push_back(arg);
+    }
+    args = args2;
+
+    EvalState state(searchPath);
     Strings files;
     bool readStdin = false;
     bool fromArgs = false;
     bool findFile = false;
     bool evalOnly = false;
     bool parseOnly = false;
-    bool xmlOutput = false;
+    OutputKind outputKind = okPlain;
     bool xmlOutputSourceLocation = true;
     bool strict = false;
     Strings attrPaths;
@@ -122,8 +143,6 @@ void run(Strings args)
         }
         else if (parseOptionArg(arg, i, args.end(), state, autoArgs))
             ;
-        else if (parseSearchPathArg(arg, i, args.end(), state))
-            ;
         else if (arg == "--add-root") {
             if (i == args.end())
                 throw UsageError("`--add-root' requires an argument");
@@ -132,7 +151,9 @@ void run(Strings args)
         else if (arg == "--indirect")
             indirectRoot = true;
         else if (arg == "--xml")
-            xmlOutput = true;
+            outputKind = okXML;
+        else if (arg == "--json")
+            outputKind = okJSON;
         else if (arg == "--no-location")
             xmlOutputSourceLocation = false;
         else if (arg == "--strict")
@@ -166,7 +187,7 @@ void run(Strings args)
     if (readStdin) {
         Expr * e = parseStdin(state);
         processExpr(state, attrPaths, parseOnly, strict, autoArgs,
-            evalOnly, xmlOutput, xmlOutputSourceLocation, e);
+            evalOnly, outputKind, xmlOutputSourceLocation, e);
     } else if (files.empty() && !fromArgs)
         files.push_back("./default.nix");
 
@@ -175,7 +196,7 @@ void run(Strings args)
             ? state.parseExprFromString(*i, absPath("."))
             : state.parseExprFromFile(resolveExprPath(lookupFileArg(state, *i)));
         processExpr(state, attrPaths, parseOnly, strict, autoArgs,
-            evalOnly, xmlOutput, xmlOutputSourceLocation, e);
+            evalOnly, outputKind, xmlOutputSourceLocation, e);
     }
 
     state.printStats();

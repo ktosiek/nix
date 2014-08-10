@@ -7,7 +7,16 @@
 
 <!--==================================================================-->
 
-<section xml:id="ssec-relnotes-1.7"><title>Release 1.7 (TBA)</title>
+<section xml:id="ssec-relnotes-1.8"><title>Release 1.8 (TBA)</title>
+
+<para>TODO</para>
+
+</section>
+
+
+<!--==================================================================-->
+
+<section xml:id="ssec-relnotes-1.7"><title>Release 1.7 (April 11, 2014)</title>
 
 <para>In addition to the usual bug fixes, this release has the
 following new features:</para>
@@ -174,6 +183,16 @@ $ nix-instantiate --eval '&lt;nixos>' -A 'config.systemd.units."nscd.service".te
   </listitem>
 
   <listitem>
+    <para><command>nix-collect-garbage</command> has a new flag
+    <option>--delete-older-than</option>
+    <replaceable>N</replaceable><literal>d</literal>, which deletes
+    all user environment generations older than
+    <replaceable>N</replaceable> days.  Likewise, <command>nix-env
+    --delete-generations</command> accepts a
+    <replaceable>N</replaceable><literal>d</literal> age limit.</para>
+  </listitem>
+
+  <listitem>
     <para>Nix now heuristically detects whether a build failure was
     due to a disk-full condition. In that case, the build is not
     flagged as “permanently failed”. This is mostly useful for Hydra,
@@ -216,6 +235,17 @@ $ bash &lt;(curl https://nixos.org/nix/install)
   </listitem>
 
   <listitem>
+    <para>More evaluation errors include position information. For
+    instance, selecting a missing attribute will print something like
+
+<screen>
+error: attribute `nixUnstabl' missing, at /etc/nixos/configurations/misc/eelco/mandark.nix:216:15
+</screen>
+
+    </para>
+  </listitem>
+
+  <listitem>
     <para>The command <command>nix-setuid-helper</command> is
     gone.</para>
   </listitem>
@@ -232,7 +262,15 @@ $ bash &lt;(curl https://nixos.org/nix/install)
     the same name from other packages.</para>
   </listitem>
 
+  <listitem>
+    <para>Nix now requires a compiler that supports C++11.</para>
+  </listitem>
+
 </itemizedlist>
+
+<para>This release has contributions from Danny Wilson, Domen Kožar,
+Eelco Dolstra, Ian-Woo Kim, Ludovic Courtès, Maxim Ivanov, Petr
+Rockai, Ricardo M. Correia and Shea Levy.</para>
 
 </section>
 

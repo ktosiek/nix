@@ -130,7 +130,7 @@ static void addFormal(const Pos & pos, Formals * formals, const Formal & formal)
 }
 
 
-static Expr * stripIndentation(SymbolTable & symbols, vector<Expr *> & es)
+static Expr * stripIndentation(const Pos & pos, SymbolTable & symbols, vector<Expr *> & es)
 {
     if (es.empty()) return new ExprString(symbols.create(""));
 
@@ -216,7 +216,7 @@ static Expr * stripIndentation(SymbolTable & symbols, vector<Expr *> & es)
     }
 
     /* If this is a single string, then don't do a concatenation. */
-    return es2->size() == 1 && dynamic_cast<ExprString *>((*es2)[0]) ? (*es2)[0] : new ExprConcatStrings(true, es2);
+    return es2->size() == 1 && dynamic_cast<ExprString *>((*es2)[0]) ? (*es2)[0] : new ExprConcatStrings(pos, true, es2);
 }
 
 
@@ -224,7 +224,7 @@ void backToString(yyscan_t scanner);
 void backToIndString(yyscan_t scanner);
 
 
-static Pos makeCurPos(const YYLTYPE & loc, ParseData * data)
+static inline Pos makeCurPos(const YYLTYPE & loc, ParseData * data)
 {
     return Pos(data->path, loc.first_line, loc.first_column);
 }
@@ -328,46 +328,46 @@ expr_if
 
 expr_op
   : '!' expr_op %prec NOT { $$ = new ExprOpNot($2); }
-| '-' expr_op %prec NEGATE { $$ = new ExprApp(new ExprApp(new ExprBuiltin(data->symbols.create("sub")), new ExprInt(0)), $2); }
+  | '-' expr_op %prec NEGATE { $$ = new ExprApp(CUR_POS, new ExprApp(new ExprVar(data->symbols.create("__sub")), new ExprInt(0)), $2); }
   | expr_op EQ expr_op { $$ = new ExprOpEq($1, $3); }
   | expr_op NEQ expr_op { $$ = new ExprOpNEq($1, $3); }
-  | expr_op '<' expr_op { $$ = new ExprApp(new ExprApp(new ExprBuiltin(data->symbols.create("lessThan")), $1), $3); }
-  | expr_op LEQ expr_op { $$ = new ExprOpNot(new ExprApp(new ExprApp(new ExprBuiltin(data->symbols.create("lessThan")), $3), $1)); }
-  | expr_op '>' expr_op { $$ = new ExprApp(new ExprApp(new ExprBuiltin(data->symbols.create("lessThan")), $3), $1); }
-  | expr_op GEQ expr_op { $$ = new ExprOpNot(new ExprApp(new ExprApp(new ExprBuiltin(data->symbols.create("lessThan")), $1), $3)); }
-  | expr_op AND expr_op { $$ = new ExprOpAnd($1, $3); }
-  | expr_op OR expr_op { $$ = new ExprOpOr($1, $3); }
-  | expr_op IMPL expr_op { $$ = new ExprOpImpl($1, $3); }
-  | expr_op UPDATE expr_op { $$ = new ExprOpUpdate($1, $3); }
+  | expr_op '<' expr_op { $$ = new ExprApp(CUR_POS, new ExprApp(new ExprVar(data->symbols.create("__lessThan")), $1), $3); }
+  | expr_op LEQ expr_op { $$ = new ExprOpNot(new ExprApp(CUR_POS, new ExprApp(new ExprVar(data->symbols.create("__lessThan")), $3), $1)); }
+  | expr_op '>' expr_op { $$ = new ExprApp(CUR_POS, new ExprApp(new ExprVar(data->symbols.create("__lessThan")), $3), $1); }
+  | expr_op GEQ expr_op { $$ = new ExprOpNot(new ExprApp(CUR_POS, new ExprApp(new ExprVar(data->symbols.create("__lessThan")), $1), $3)); }
+  | expr_op AND expr_op { $$ = new ExprOpAnd(CUR_POS, $1, $3); }
+  | expr_op OR expr_op { $$ = new ExprOpOr(CUR_POS, $1, $3); }
+  | expr_op IMPL expr_op { $$ = new ExprOpImpl(CUR_POS, $1, $3); }
+  | expr_op UPDATE expr_op { $$ = new ExprOpUpdate(CUR_POS, $1, $3); }
   | expr_op '?' attrpath { $$ = new ExprOpHasAttr($1, *$3); }
   | expr_op '+' expr_op
     { vector<Expr *> * l = new vector<Expr *>;
       l->push_back($1);
       l->push_back($3);
-      $$ = new ExprConcatStrings(false, l);
+      $$ = new ExprConcatStrings(CUR_POS, false, l);
     }
-  | expr_op '-' expr_op { $$ = new ExprApp(new ExprApp(new ExprBuiltin(data->symbols.create("sub")), $1), $3); }
-  | expr_op '*' expr_op { $$ = new ExprApp(new ExprApp(new ExprBuiltin(data->symbols.create("mul")), $1), $3); }
-  | expr_op '/' expr_op { $$ = new ExprApp(new ExprApp(new ExprBuiltin(data->symbols.create("div")), $1), $3); }
-  | expr_op CONCAT expr_op { $$ = new ExprOpConcatLists($1, $3); }
+  | expr_op '-' expr_op { $$ = new ExprApp(CUR_POS, new ExprApp(new ExprVar(data->symbols.create("__sub")), $1), $3); }
+  | expr_op '*' expr_op { $$ = new ExprApp(CUR_POS, new ExprApp(new ExprVar(data->symbols.create("__mul")), $1), $3); }
+  | expr_op '/' expr_op { $$ = new ExprApp(CUR_POS, new ExprApp(new ExprVar(data->symbols.create("__div")), $1), $3); }
+  | expr_op CONCAT expr_op { $$ = new ExprOpConcatLists(CUR_POS, $1, $3); }
   | expr_app
   ;
 
 expr_app
   : expr_app expr_select
-    { $$ = new ExprApp($1, $2); }
+    { $$ = new ExprApp(CUR_POS, $1, $2); }
   | expr_select { $$ = $1; }
   ;
 
 expr_select
   : expr_simple '.' attrpath
-    { $$ = new ExprSelect($1, *$3, 0); }
+    { $$ = new ExprSelect(CUR_POS, $1, *$3, 0); }
   | expr_simple '.' attrpath OR_KW expr_select
-    { $$ = new ExprSelect($1, *$3, $5); }
+    { $$ = new ExprSelect(CUR_POS, $1, *$3, $5); }
   | /* Backwards compatibility: because Nixpkgs has a rarely used
        function named ‘or’, allow stuff like ‘map or [...]’. */
     expr_simple OR_KW
-    { $$ = new ExprApp($1, new ExprVar(CUR_POS, data->symbols.create("or"))); }
+    { $$ = new ExprApp(CUR_POS, $1, new ExprVar(CUR_POS, data->symbols.create("or"))); }
   | expr_simple { $$ = $1; }
   ;
 
@@ -381,29 +381,22 @@ expr_simple
   | INT { $$ = new ExprInt($1); }
   | '"' string_parts '"' { $$ = $2; }
   | IND_STRING_OPEN ind_string_parts IND_STRING_CLOSE {
-      $$ = stripIndentation(data->symbols, *$2);
+      $$ = stripIndentation(CUR_POS, data->symbols, *$2);
   }
   | PATH { $$ = new ExprPath(absPath($1, data->basePath)); }
   | SPATH {
       string path($1 + 1, strlen($1) - 2);
-      Path path2 = data->state.findFile(path);
-      /* The file wasn't found in the search path.  However, we can't
-         throw an error here, because the expression might never be
-         evaluated.  So return an expression that lazily calls
-         ‘throw’. */
-      $$ = path2 == ""
-          ? (Expr * ) new ExprApp(
-              new ExprBuiltin(data->symbols.create("throw")),
-              new ExprString(data->symbols.create(
-                      (format("file `%1%' was not found in the Nix search path (add it using $NIX_PATH or -I)") % path).str())))
-          : (Expr * ) new ExprPath(path2);
+      $$ = new ExprApp(CUR_POS,
+          new ExprApp(new ExprVar(data->symbols.create("__findFile")),
+              new ExprVar(data->symbols.create("__nixPath"))),
+          new ExprString(data->symbols.create(path)));
   }
   | URI { $$ = new ExprString(data->symbols.create($1)); }
   | '(' expr ')' { $$ = $2; }
   /* Let expressions `let {..., body = ...}' are just desugared
      into `(rec {..., body = ...}).body'. */
   | LET '{' binds '}'
-    { $3->recursive = true; $$ = new ExprSelect($3, data->symbols.create("body")); }
+    { $3->recursive = true; $$ = new ExprSelect(noPos, $3, data->symbols.create("body")); }
   | REC '{' binds '}'
     { $3->recursive = true; $$ = $3; }
   | '{' binds '}'
@@ -413,7 +406,7 @@ expr_simple
 
 string_parts
   : STR
-  | string_parts_interpolated { $$ = new ExprConcatStrings(true, $1); }
+  | string_parts_interpolated { $$ = new ExprConcatStrings(CUR_POS, true, $1); }
   | { $$ = new ExprString(data->symbols.create("")); }
   ;
 
@@ -458,7 +451,7 @@ binds
       foreach (AttrPath::iterator, i, *$6) {
           if ($$->attrs.find(i->symbol) != $$->attrs.end())
               dupAttr(i->symbol, makeCurPos(@6, data), $$->attrs[i->symbol].pos);
-          $$->attrs[i->symbol] = ExprAttrs::AttrDef(new ExprSelect($4, i->symbol), makeCurPos(@6, data));
+          $$->attrs[i->symbol] = ExprAttrs::AttrDef(new ExprSelect(CUR_POS, $4, i->symbol), makeCurPos(@6, data));
       }
     }
   | { $$ = new ExprAttrs; }
@@ -509,7 +502,7 @@ attr
 
 string_attr
   : '"' string_parts '"' { $$ = $2; }
-  | DOLLAR_CURLY expr '}' { $$ = new ExprConcatStrings(true, new vector<Expr*>(1, $2)); }
+  | DOLLAR_CURLY expr '}' { $$ = new ExprConcatStrings(CUR_POS, true, new vector<Expr*>(1, $2)); }
   ;
 
 expr_list
@@ -592,7 +585,13 @@ Path resolveExprPath(Path path)
 
 Expr * EvalState::parseExprFromFile(const Path & path)
 {
-    return parse(readFile(path).c_str(), path, dirOf(path), staticBaseEnv);
+    return parseExprFromFile(path, staticBaseEnv);
+}
+
+
+Expr * EvalState::parseExprFromFile(const Path & path, StaticEnv & staticEnv)
+{
+    return parse(readFile(path).c_str(), path, dirOf(path), staticEnv);
 }
 
 
@@ -608,7 +607,7 @@ Expr * EvalState::parseExprFromString(const string & s, const Path & basePath)
 }
 
 
- void EvalState::addToSearchPath(const string & s, bool warn)
+void EvalState::addToSearchPath(const string & s, bool warn)
 {
     size_t pos = s.find('=');
     string prefix;
@@ -623,13 +622,19 @@ Expr * EvalState::parseExprFromString(const string & s, const Path & basePath)
     path = absPath(path);
     if (pathExists(path)) {
         debug(format("adding path `%1%' to the search path") % path);
-        searchPath.insert(searchPathInsertionPoint, std::pair<string, Path>(prefix, path));
+        searchPath.push_back(std::pair<string, Path>(prefix, path));
     } else if (warn)
         printMsg(lvlError, format("warning: Nix search path entry `%1%' does not exist, ignoring") % path);
 }
 
 
 Path EvalState::findFile(const string & path)
+{
+    return findFile(searchPath, path);
+}
+
+
+Path EvalState::findFile(SearchPath & searchPath, const string & path)
 {
     foreach (SearchPath::iterator, i, searchPath) {
         Path res;
@@ -644,7 +649,7 @@ Path EvalState::findFile(const string & path)
         }
         if (pathExists(res)) return canonPath(res);
     }
-    return "";
+    throw ThrownError(format("file `%1%' was not found in the Nix search path (add it using $NIX_PATH or -I)") % path);
 }
 
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <unordered_set>
 
 #include "store-api.hh"
 #include "util.hh"
@@ -29,14 +30,12 @@ struct Derivation;
 
 struct OptimiseStats
 {
-    unsigned long totalFiles;
-    unsigned long sameContents;
     unsigned long filesLinked;
     unsigned long long bytesFreed;
     unsigned long long blocksFreed;
     OptimiseStats()
     {
-        totalFiles = sameContents = filesLinked = 0;
+        filesLinked = 0;
         bytesFreed = blocksFreed = 0;
     }
 };
@@ -303,7 +302,11 @@ private:
 
     void checkDerivationOutputs(const Path & drvPath, const Derivation & drv);
 
-    void optimisePath_(OptimiseStats & stats, const Path & path);
+    typedef std::unordered_set<ino_t> InodeHash;
+
+    InodeHash loadInodeHash();
+    Strings readDirectoryIgnoringInodes(const Path & path, const InodeHash & inodeHash);
+    void optimisePath_(OptimiseStats & stats, const Path & path, InodeHash & inodeHash);
 
     // Internal versions that are not wrapped in retry_sqlite.
     bool isValidPath_(const Path & path);

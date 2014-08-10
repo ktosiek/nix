@@ -54,13 +54,13 @@ dist-files += $(man-pages)
 $(d)/manual.html: $(d)/manual.xml $(MANUAL_SRCS) $(d)/manual.is-valid
 	$(trace-gen) $(XSLTPROC) --xinclude --stringparam profile.condition manual \
 	  $(docbookxsl)/profiling/profile.xsl $< | \
-	  $(XSLTPROC) --output $@ $(docbookxsl)/html/docbook.xsl -
+	  $(XSLTPROC) --output $@ $(docbookxsl)/xhtml/docbook.xsl -
 
 $(foreach file, $(d)/manual.html $(d)/style.css, $(eval $(call install-data-in, $(file), $(docdir)/manual)))
 
 $(foreach file, $(wildcard $(d)/figures/*.png), $(eval $(call install-data-in, $(file), $(docdir)/manual/figures)))
 
-$(foreach file, $(wildcard $(docbookxsl)/images/callouts/*.gif), $(eval $(call install-data-in, $(file), $(docdir)/manual/images/callouts)))
+$(foreach file, $(wildcard $(d)/images/callouts/*.gif), $(eval $(call install-data-in, $(file), $(docdir)/manual/images/callouts)))
 
 $(eval $(call install-symlink, manual.html, $(docdir)/manual/index.html))
 
@@ -94,12 +94,12 @@ NEWS_OPTS = \
 
 $(d)/release-notes.html: $(d)/release-notes.xml
 	$(trace-gen) $(XSLTPROC) --xinclude --output $@ $(NEWS_OPTS) \
-	  $(docbookxsl)/html/docbook.xsl $<
+	  $(docbookxsl)/xhtml/docbook.xsl $<
 
 NEWS: $(d)/release-notes.xml
 	$(trace-gen) $(XSLTPROC) --xinclude doc/manual/quote-literals.xsl $< | \
 	  $(XSLTPROC) --output $@.tmp.html $(NEWS_OPTS) \
-	  $(docbookxsl)/html/docbook.xsl - && \
+	  $(docbookxsl)/xhtml/docbook.xsl - && \
 	LANG=en_US.UTF-8 $(w3m) -dump $@.tmp.html > $@.tmp && \
 	sed -e 's/●/*/g' -e 's/○/-/g' -e 's/━/-/g' < $@.tmp > NEWS && \
 	rm $@.tmp $@.tmp.html
