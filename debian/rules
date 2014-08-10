@@ -3,7 +3,7 @@ override_dh_auto_clean:
 	./bootstrap.sh
 	./configure
 	make clean
-	rm Makefile.config
+	rm Makefile.config || true
 
 override_dh_auto_configure:
 	dh_auto_configure -- --enable-gc --enable-perl-bindings \
